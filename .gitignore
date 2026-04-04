@@ -1,0 +1,42 @@
+# QP Tunnel - .gitignore
+
+# Environment files (contain API tokens)
+.env.tunnel
+.env
+
+# State directory (peer registry, keys, audit logs)
+state/
+peers/
+
+# WireGuard keys (should never be committed)
+*.key
+*.pub
+*.psk
+privatekey
+publickey
+
+# Client configs (contain private keys)
+*.conf
+!templates/*.tpl
+
+# Backup files
+*.bak
+*.orig
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Test artifacts
+/tmp/
+*.tmp
+
+# bats test output
+test_results/

@@ -1,0 +1,13 @@
+QP Tunnel
+Copyright 2026 Quantum Pipes Technologies, LLC
+
+Licensed under the Apache License, Version 2.0.
+
+This product includes software developed by Quantum Pipes Technologies, LLC.
+https://quantumpipes.com
+
+Third-party dependencies:
+- WireGuard (https://www.wireguard.com/) - GPL-2.0 (kernel module), MIT (tools)
+- jq (https://stedolan.github.io/jq/) - MIT
+- bats-core (https://github.com/bats-core/bats-core) - MIT (testing only)
+- qp-capsule (https://github.com/quantumpipes/capsule) - Apache-2.0 (optional)

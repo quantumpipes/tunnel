@@ -1,0 +1,232 @@
+{
+  "version": "1.0.0",
+  "description": "Golden test vectors for QP Tunnel JSONL audit log format",
+  "fixtures": [
+    {
+      "description": "Relay setup via DigitalOcean provider (success)",
+      "entry": {
+        "timestamp": "2026-04-04T14:00:00Z",
+        "action": "setup_relay",
+        "status": "success",
+        "message": "Provisioned relay Droplet 198.51.100.23",
+        "user": "james-it",
+        "details": {
+          "droplet_ip": "198.51.100.23",
+          "droplet_id": "412837561",
+          "provider": "digitalocean"
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "Peer added with tunnel IP allocation (success)",
+      "entry": {
+        "timestamp": "2026-04-04T14:05:30Z",
+        "action": "peer_add",
+        "status": "success",
+        "message": "Added peer alice (10.8.0.10)",
+        "user": "james-it",
+        "details": {
+          "name": "alice",
+          "tunnel_ip": "10.8.0.10"
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "Peer removed and archived (success)",
+      "entry": {
+        "timestamp": "2026-04-04T16:42:00Z",
+        "action": "peer_remove",
+        "status": "success",
+        "message": "Removed peer bob (10.8.0.11)",
+        "user": "james-it",
+        "details": {
+          "name": "bob",
+          "tunnel_ip": "10.8.0.11"
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "Relay key rotation with old and new public keys (success)",
+      "entry": {
+        "timestamp": "2026-04-04T18:00:00Z",
+        "action": "key_rotate",
+        "status": "success",
+        "message": "Relay keys rotated",
+        "user": "james-it",
+        "details": {
+          "old_public_key": "dGhpcyBpcyBhIGZha2Ugb2xkIHB1YmxpYyBrZXkgdmFs",
+          "new_public_key": "bmV3IGtleSB2YWx1ZSBnZW5lcmF0ZWQgYnkgd2ctZ2Vu"
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "Service opened with PQ TLS and certificate fingerprint (success)",
+      "entry": {
+        "timestamp": "2026-04-04T14:10:00Z",
+        "action": "service_open",
+        "status": "success",
+        "message": "Opened grafana at https://10.8.0.2:8443",
+        "user": "operator",
+        "details": {
+          "name": "grafana",
+          "upstream": "localhost:3000",
+          "port": 8443,
+          "listen_ip": "10.8.0.2",
+          "tls_fingerprint": "SHA256:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "Service closed and certificates archived (success)",
+      "entry": {
+        "timestamp": "2026-04-04T20:30:00Z",
+        "action": "service_close",
+        "status": "success",
+        "message": "Closed grafana (port 8443)",
+        "user": "operator",
+        "details": {
+          "name": "grafana",
+          "port": 8443
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "ERR trap fired during peer addition (failure)",
+      "entry": {
+        "timestamp": "2026-04-04T15:22:10Z",
+        "action": "tunnel-add-peer_error",
+        "status": "failure",
+        "message": "ERR trap fired at line 58",
+        "user": "operator",
+        "details": {
+          "line": "58",
+          "script": "tunnel-add-peer"
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "Relay setup via SSH provider with masked token in message (success)",
+      "entry": {
+        "timestamp": "2026-04-04T09:00:00Z",
+        "action": "setup_relay",
+        "status": "success",
+        "message": "Configured relay on 203.0.113.50 via SSH",
+        "user": "root",
+        "details": {
+          "relay_ip": "203.0.113.50",
+          "provider": "ssh"
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "Capsule-sealed entry with seal envelope",
+      "entry": {
+        "timestamp": "2026-04-04T14:05:30Z",
+        "action": "peer_add",
+        "status": "success",
+        "message": "Added peer carol (10.8.0.12)",
+        "user": "james-it",
+        "details": {
+          "name": "carol",
+          "tunnel_ip": "10.8.0.12"
+        }
+      },
+      "valid": true,
+      "capsule_seal": {
+        "hash_algorithm": "sha3-256",
+        "content_hash": "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069",
+        "signature_algorithm": "ed25519",
+        "signature": "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c6f7a0e0e7d3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8",
+        "public_key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa3f4a18446b7e8c5e7a1b2",
+        "sequence": 3,
+        "previous_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "description": "Device joined relay (success)",
+      "entry": {
+        "timestamp": "2026-04-04T14:02:00Z",
+        "action": "tunnel_join",
+        "status": "success",
+        "message": "Joined relay 198.51.100.23:51820 as 10.8.0.2",
+        "user": "root",
+        "details": {
+          "relay_endpoint": "198.51.100.23:51820",
+          "server_ip": "10.8.0.2"
+        }
+      },
+      "valid": true
+    },
+    {
+      "description": "INVALID: missing timestamp field",
+      "entry": {
+        "action": "peer_add",
+        "status": "success",
+        "message": "Added peer dave (10.8.0.13)",
+        "user": "operator",
+        "details": {
+          "name": "dave",
+          "tunnel_ip": "10.8.0.13"
+        }
+      },
+      "valid": false
+    },
+    {
+      "description": "INVALID: missing action field",
+      "entry": {
+        "timestamp": "2026-04-04T12:00:00Z",
+        "status": "success",
+        "message": "Something happened",
+        "user": "operator",
+        "details": {}
+      },
+      "valid": false
+    },
+    {
+      "description": "INVALID: status is not success or failure",
+      "entry": {
+        "timestamp": "2026-04-04T12:00:00Z",
+        "action": "peer_add",
+        "status": "maybe",
+        "message": "Added peer eve",
+        "user": "operator",
+        "details": {
+          "name": "eve"
+        }
+      },
+      "valid": false
+    },
+    {
+      "description": "INVALID: details is null instead of an object",
+      "entry": {
+        "timestamp": "2026-04-04T12:00:00Z",
+        "action": "peer_add",
+        "status": "success",
+        "message": "Added peer frank",
+        "user": "operator",
+        "details": null
+      },
+      "valid": false
+    },
+    {
+      "description": "INVALID: timestamp is not ISO 8601 UTC",
+      "entry": {
+        "timestamp": "April 4, 2026 2:00 PM",
+        "action": "setup_relay",
+        "status": "success",
+        "message": "Configured relay",
+        "user": "root",
+        "details": {}
+      },
+      "valid": false
+    }
+  ]
+}

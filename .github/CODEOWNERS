@@ -1,0 +1,20 @@
+# QP Tunnel - Code Owners
+# These owners will be requested for review when someone opens a pull request.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @quantumpipes/maintainers
+
+# Core library (security-critical)
+/lib/ @quantumpipes/maintainers
+
+# Audit and cryptographic operations
+/lib/audit.sh @quantumpipes/maintainers
+
+# Security & legal
+/SECURITY.md @quantumpipes/maintainers
+/PATENTS.md @quantumpipes/maintainers
+/LICENSE @quantumpipes/maintainers
+
+# CI/CD
+/.github/workflows/ @quantumpipes/maintainers

@@ -1,0 +1,99 @@
+# QP Tunnel CI/CD Pipeline
+# Lint, test, and validate the tunnel toolkit on every push and PR.
+#
+# Latest versions as of March 2026.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  SHELLCHECK_VERSION: "0.10.0"
+  BATS_VERSION: "v1.11.1"
+
+jobs:
+  # ==========================================================================
+  # LINT (ShellCheck static analysis)
+  # ==========================================================================
+  lint:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Lint all shell scripts
+        run: |
+          shellcheck -s bash -S warning \
+            tunnel-*.sh \
+            lib/*.sh
+
+  # ==========================================================================
+  # TEST SMOKE (Quick validation without WireGuard)
+  # ==========================================================================
+  test-smoke:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run smoke tests
+        run: bash tests/smoke/test_standalone.sh
+
+  # ==========================================================================
+  # TEST UNIT (bats-core unit tests)
+  # ==========================================================================
+  test-unit:
+    name: Unit Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install bats-core
+        run: |
+          git clone --depth 1 --branch ${{ env.BATS_VERSION }} https://github.com/bats-core/bats-core.git /tmp/bats
+          sudo /tmp/bats/install.sh /usr/local
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run unit tests
+        run: bats tests/unit/
+
+  # ==========================================================================
+  # TEST INTEGRATION (bats-core integration tests)
+  # ==========================================================================
+  test-integration:
+    name: Integration Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    needs: [test-unit]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install bats-core
+        run: |
+          git clone --depth 1 --branch ${{ env.BATS_VERSION }} https://github.com/bats-core/bats-core.git /tmp/bats
+          sudo /tmp/bats/install.sh /usr/local
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run integration tests
+        run: bats tests/integration/
