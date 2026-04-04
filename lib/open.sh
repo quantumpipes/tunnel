@@ -600,7 +600,8 @@ _archive_service_certs() {
     local config_dir
     config_dir="$(ensure_config_dir)"
     local tls_dir="${config_dir}/tls"
-    local archive_dir="${config_dir}/archive/tls/${name}/$(date +%s)"
+    local archive_dir
+    archive_dir="${config_dir}/archive/tls/${name}/$(date +%s)"
 
     if [[ -f "${tls_dir}/${name}.crt" || -f "${tls_dir}/${name}.key" ]]; then
         mkdir -p "$archive_dir"

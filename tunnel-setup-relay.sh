@@ -366,7 +366,7 @@ if [[ "$PROVIDER" == "digitalocean" ]]; then
 
         # Poll for IP (up to 120s)
         DROPLET_IP=""
-        for i in $(seq 1 24); do
+        for _ in $(seq 1 24); do
             sleep 5
             DROPLET_INFO="$(curl -sS -H "Authorization: Bearer ${DO_API_TOKEN}" \
                 "https://api.digitalocean.com/v2/droplets/${DROPLET_ID}")"

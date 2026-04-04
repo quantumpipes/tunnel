@@ -66,7 +66,7 @@ teardown() {
 @test "CA private key has mode 600" {
     _generate_ca
     local perms
-    perms="$(stat -f '%A' "$TUNNEL_CONFIG_DIR/tls/ca.key" 2>/dev/null || stat -c '%a' "$TUNNEL_CONFIG_DIR/tls/ca.key")"
+    perms="$(stat -c '%a' "$TUNNEL_CONFIG_DIR/tls/ca.key" 2>/dev/null || stat -f '%A' "$TUNNEL_CONFIG_DIR/tls/ca.key")"
     [ "$perms" = "600" ]
 }
 
@@ -74,7 +74,7 @@ teardown() {
     _generate_ca
     _generate_service_cert "grafana"
     local perms
-    perms="$(stat -f '%A' "$TUNNEL_CONFIG_DIR/tls/grafana.key" 2>/dev/null || stat -c '%a' "$TUNNEL_CONFIG_DIR/tls/grafana.key")"
+    perms="$(stat -c '%a' "$TUNNEL_CONFIG_DIR/tls/grafana.key" 2>/dev/null || stat -f '%A' "$TUNNEL_CONFIG_DIR/tls/grafana.key")"
     [ "$perms" = "600" ]
 }
 

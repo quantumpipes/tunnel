@@ -149,6 +149,7 @@ teardown() {
 @test "TUNNEL_APP_NAME defaults to qp-tunnel" {
     unset TUNNEL_APP_NAME
     source "$LIB_DIR/common.sh"
+    apply_defaults
     [ "$TUNNEL_APP_NAME" = "qp-tunnel" ]
 }
 

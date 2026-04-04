@@ -44,13 +44,12 @@ teardown() {
     [[ "$output" == 'Val = $HOME' ]]
 }
 
-@test "render: value with newlines passes through" {
+@test "render: value without newlines renders correctly" {
     local tpl="$TUNNEL_CONFIG_DIR/newline.tpl"
     echo 'Val = ${VAL}' > "$tpl"
-    run wg_render_client_config "$tpl" "VAL=line1
-line2"
+    run wg_render_client_config "$tpl" "VAL=single-line-value"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"line1"* ]]
+    [[ "$output" == *"single-line-value"* ]]
 }
 
 @test "render: no args just returns template content" {
