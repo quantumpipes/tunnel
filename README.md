@@ -25,12 +25,12 @@ QP Tunnel solves this with automation, audit logging, and defense-in-depth encry
 ```
 You (laptop)            Relay (any server)          Your device
   ┌────────┐            ┌──────────────┐            ┌──────────────┐
-  │  alice  │──WireGuard─│   10.8.0.1   │──WireGuard─│   10.8.0.2   │
-  │  .0.10  │            │    relay     │            │  your server │
+  │ alice  │──WireGuard─│   10.8.0.1   │──WireGuard─│   10.8.0.2   │
+  │ .0.10  │            │    relay     │            │  your server │
   └────────┘            └──────────────┘            └──────────────┘
   ┌────────┐                   │
-  │  bob   │───────────────────┘
-  │  .0.11  │   Split-tunnel: only 10.8.0.0/24
+  │ bob    │───────────────────┘
+  │ .0.11  │   Split-tunnel: only 10.8.0.0/24
   └────────┘   routes through the VPN
 ```
 
@@ -148,14 +148,14 @@ Mobile devices: install the generated `ca.mobileconfig` on iOS to trust the inte
 
 ```
                       ┌─────────────────────────────────┐
-                      │         Relay Server             │
-                      │    (any Linux machine/VPS)       │
-                      │                                  │
-                      │    WireGuard: 10.8.0.1           │
-                      │    Port: 51820/udp               │
-                      │    NAT + IP forwarding           │
-                      │    Holds no data. Forwards only. │
-                      └──────────┬──────────┬────────────┘
+                      │        Relay Server             │
+                      │   (any Linux machine/VPS)       │
+                      │                                 │
+                      │   WireGuard: 10.8.0.1           │
+                      │   Port: 51820/udp               │
+                      │   NAT + IP forwarding           │
+                      │   Holds no data. Forwards only. │
+                      └──────────┬──────────┬───────────┘
                                  │          │
               ┌──────────────────┘          └──────────────────┐
               │                                                │
@@ -182,27 +182,27 @@ Mobile devices: install the generated `ca.mobileconfig` on iOS to trust the inte
 ## Double Encryption
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        OUTER LAYER: WireGuard                          │
-│                                                                         │
-│  Key exchange: Curve25519 (X25519)                                     │
-│  Encryption:   ChaCha20-Poly1305                                       │
-│  Hashing:      BLAKE2s                                                  │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │                   INNER LAYER: PQ TLS 1.3                      │    │
-│  │                   (tunnel-open services only)                   │    │
-│  │                                                                 │    │
-│  │  Key exchange: X25519MLKEM768 (hybrid classical + PQ)          │    │
-│  │  Encryption:   AES-256-GCM                                     │    │
-│  │  Certificates: Ed25519 (internal CA)                           │    │
-│  │                                                                 │    │
-│  │              ┌────────────────────────┐                        │    │
-│  │              │   Your application     │                        │    │
-│  │              │   (plaintext HTTP)     │                        │    │
-│  │              └────────────────────────┘                        │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                        OUTER LAYER: WireGuard                        │
+│                                                                      │
+│     Key exchange: Curve25519 (X25519)                                │
+│     Encryption:   ChaCha20-Poly1305                                  │
+│     Hashing:      BLAKE2s                                            │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐    │
+│  │                   INNER LAYER: PQ TLS 1.3                    │    │
+│  │                   (tunnel-open services only)                │    │
+│  │                                                              │    │
+│  │  Key exchange: X25519MLKEM768 (hybrid classical + PQ)        │    │
+│  │  Encryption:   AES-256-GCM                                   │    │
+│  │  Certificates: Ed25519 (internal CA)                         │    │
+│  │                                                              │    │
+│  │              ┌────────────────────────┐                      │    │
+│  │              │   Your application     │                      │    │
+│  │              │   (plaintext HTTP)     │                      │    │
+│  │              └────────────────────────┘                      │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 If Curve25519 is broken by a quantum computer, the inner PQ TLS layer still protects session data. If ML-KEM-768 has an implementation flaw, WireGuard's outer layer still protects. Both must fail simultaneously for data exposure.
