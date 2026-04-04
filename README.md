@@ -1,10 +1,26 @@
+<div align="center">
+
 # QP Tunnel
 
-**Secure WireGuard tunnels to any device, from anywhere.**
+**Encrypted remote access to any device, from anywhere.**
 
-QP Tunnel automates WireGuard VPN setup, peer management, key rotation, service exposure, and cryptographic audit logging. Nine commands give you encrypted remote access to any machine: a server in a data center, a Raspberry Pi at home, or a workstation behind a corporate firewall.
+Automate WireGuard VPN setup, peer management, and service exposure with post-quantum TLS. Nine commands. Structured audit logging. Double encryption. Zero cloud dependency.
 
-Works with any Linux server. No vendor lock-in. No cloud dependency. Fully open source.
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Tests](https://img.shields.io/badge/Tests-370%2B-brightgreen.svg)](./tests/)
+[![Conformance](https://img.shields.io/badge/Conformance-15_vectors-ff69b4.svg)](./conformance/)
+[![Crypto](https://img.shields.io/badge/Crypto-WireGuard_%2B_PQ_TLS-purple.svg)](#security)
+[![Capsule](https://img.shields.io/badge/Audit-Capsule_Protocol-orange.svg)](https://github.com/quantumpipes/capsule)
+
+</div>
+
+---
+
+## The Problem
+
+You have a device behind a firewall. You need to reach it from anywhere, securely, without exposing it to the internet. Traditional options all have tradeoffs: port forwarding is fragile and insecure, SSH tunnels break under reconnection, commercial VPNs require cloud accounts and ongoing subscriptions, and manual WireGuard setup is error-prone at scale.
+
+QP Tunnel solves this with automation, audit logging, and defense-in-depth encryption.
 
 ```
 You (laptop)            Relay (any server)          Your device
@@ -18,28 +34,32 @@ You (laptop)            Relay (any server)          Your device
   └────────┘   routes through the VPN
 ```
 
-## Why QP Tunnel?
+---
+
+## Why QP Tunnel
 
 **Works with any server.** DigitalOcean, AWS, Hetzner, Linode, Oracle Cloud (free tier), a Raspberry Pi, or your old laptop. If it runs Linux and WireGuard, it works.
 
 **Nine commands.** Setup, join, add peer, remove peer, status, rotate keys, open, close, list. That is the entire interface.
 
-**Instant revocation.** Remove a peer and access drops immediately. No grace period. No session expiry.
+**Double encryption.** WireGuard provides the outer tunnel (Curve25519/ChaCha20-Poly1305). Caddy provides an inner PQ TLS 1.3 layer (ML-KEM-768 hybrid key exchange) for exposed services. Both must fail for data exposure.
 
-**Cryptographic audit trail.** Every operation logged as structured JSON. Optional [Capsule Protocol](https://github.com/quantumpipes/capsule) integration provides tamper-evident sealing with SHA3-256 + Ed25519.
+**Cryptographic audit trail.** Every operation logged as structured JSON. Optional [Capsule Protocol](https://github.com/quantumpipes/capsule) integration seals each entry with SHA3-256 + Ed25519 for tamper evidence.
 
-**Split-tunnel by default.** Only VPN subnet traffic routes through the relay. Everything else takes the user's normal path.
+**Instant revocation.** Remove a peer and access drops immediately. No grace period. No session expiry. Revoked configs archived for compliance.
 
-**Air-gap compatible.** No internet required after initial setup. No phone-home. No telemetry.
+**Air-gap compatible.** No internet required after initial setup. No phone-home. No telemetry. No vendor lock-in.
 
-**White-label ready.** Set `TUNNEL_APP_NAME=yourproject` and every path, tag, and config adapts.
+**White-label ready.** Set `TUNNEL_APP_NAME=yourproject` and every path, tag, and certificate adapts.
+
+---
 
 ## Quick Start
 
 ### Option 1: Use any existing server (SSH)
 
 ```bash
-# Configure your remote server as the relay (runs setup over SSH)
+# Configure your remote server as the relay
 ./tunnel-setup-relay.sh --provider=ssh --host=203.0.113.10
 
 # On the target device: join the relay
@@ -53,7 +73,6 @@ You (laptop)            Relay (any server)          Your device
 ### Option 2: This machine IS the relay
 
 ```bash
-# Run directly on the machine that will be the relay
 ./tunnel-setup-relay.sh --provider=local
 ```
 
@@ -64,24 +83,23 @@ export DO_API_TOKEN=dop_v1_...
 ./tunnel-setup-relay.sh --provider=digitalocean
 ```
 
-### Option 4: Generate a setup script for manual use
+### Option 4: Generate a setup script
 
 ```bash
-# Output a setup script you can run anywhere, any way you like
 ./tunnel-setup-relay.sh --generate-script > setup-relay.sh
-
-# Then: scp it, curl it, paste it, pipe it over SSH...
 ssh root@your-server < setup-relay.sh
 ```
 
 ### Option 5: Use Make targets
 
 ```bash
-cp .env.tunnel.example .env.tunnel   # Configure
-make tunnel-setup-local              # Or: tunnel-setup-ssh, tunnel-setup-do
+cp .env.tunnel.example .env.tunnel
+make tunnel-setup-local      # Or: tunnel-setup-ssh, tunnel-setup-do
 make tunnel-add-peer NAME=alice
 make tunnel-status
 ```
+
+---
 
 ## Commands
 
@@ -97,25 +115,23 @@ make tunnel-status
 | `tunnel-close.sh --name <n>` | Stop exposing a service |
 | `tunnel-list.sh` | List all open services |
 
-### Exposing Services (tunnel-open)
+### Exposing Services
 
-Expose any local web application over the tunnel with post-quantum TLS encryption:
+Expose any local application over the tunnel with post-quantum TLS:
 
 ```bash
 # Expose Grafana with PQ TLS
-tunnel-open --name grafana --to localhost:3000
+./tunnel-open.sh --name grafana --to localhost:3000
 
 # Expose Jenkins on a specific port
-tunnel-open --name jenkins --to localhost:8080 --port 8444
+./tunnel-open.sh --name jenkins --to localhost:8080 --port 8444
 
-# List all open services
-tunnel-list
+# List open services
+./tunnel-list.sh
 
 # Close a service
-tunnel-close --name grafana
+./tunnel-close.sh --name grafana
 ```
-
-**Double encryption:** WireGuard provides the outer tunnel (Curve25519/ChaCha20-Poly1305). Caddy provides the inner PQ TLS 1.3 layer (ML-KEM-768 hybrid key exchange). Exposed ports bind exclusively to the tunnel interface with firewall rules restricting access to the tunnel subnet.
 
 **How it works:**
 1. Generates an internal CA (Ed25519) and per-service TLS certificates
@@ -124,18 +140,9 @@ tunnel-close --name grafana
 4. Installs firewall rules allowing only tunnel subnet traffic
 5. Registers the service and creates a Capsule audit record
 
-**Mobile device access:** Install the generated `ca.mobileconfig` on iOS devices to trust the internal CA. macOS and Linux have equivalent trust store commands shown in the command output.
+Mobile devices: install the generated `ca.mobileconfig` on iOS to trust the internal CA. macOS and Linux trust store commands shown in the command output.
 
-### Relay Setup Providers
-
-| Provider | Flag | Requires | What it does |
-|----------|------|----------|--------------|
-| **SSH** | `--provider=ssh --host=IP` | SSH access | Configures an existing server remotely |
-| **Local** | `--provider=local` | Root on relay | Configures this machine as the relay |
-| **DigitalOcean** | `--provider=digitalocean` | `DO_API_TOKEN` | Provisions a new Droplet |
-| **Script** | `--generate-script` | Nothing | Outputs setup script to stdout |
-
-Auto-detection: if `DO_API_TOKEN` is set, defaults to DigitalOcean. If `RELAY_HOST` is set, defaults to SSH.
+---
 
 ## Architecture
 
@@ -162,67 +169,47 @@ Auto-detection: if `DO_API_TOKEN` is set, defaults to DigitalOcean. If `RELAY_HO
       └──────────────────┘                        └──────────────────────┘
 ```
 
-**The relay** is a rendezvous point. It forwards encrypted WireGuard packets between peers. It holds no data. It runs no application logic. If compromised, attackers see only encrypted traffic they cannot decrypt.
+**The relay** is a rendezvous point. It forwards encrypted WireGuard packets between peers. It holds no data and runs no application logic. If compromised, attackers see only encrypted traffic they cannot decrypt.
 
-**The target device** (your server, workstation, IoT device) connects to the relay as a persistent peer. It reconnects automatically on reboot via systemd.
+**The target device** connects to the relay as a persistent peer and reconnects automatically on reboot via systemd.
 
-**Remote peers** (you, your team, your customers) connect through WireGuard apps on any platform: macOS, Windows, Linux, iOS, Android. Each peer gets a unique keypair, a unique preshared key, and a unique IP address.
+**Remote peers** connect through WireGuard apps on any platform: macOS, Windows, Linux, iOS, Android. Each peer gets a unique keypair, a unique preshared key, and a unique IP address.
 
-**Split-tunnel** routes only `10.8.0.0/24` traffic through the VPN. When alice watches YouTube, that goes through her normal internet. When she pings `10.8.0.2`, that goes through the encrypted tunnel.
+**Split-tunnel** routes only `10.8.0.0/24` through the VPN. Everything else takes the normal internet path.
 
-## Configuration
+---
 
-Copy `.env.tunnel.example` to `.env.tunnel` and customize:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TUNNEL_APP_NAME` | `qp-tunnel` | Config directory, server tags |
-| `TUNNEL_SUBNET` | `10.8.0.0/24` | VPN subnet |
-| `TUNNEL_RELAY_IP` | `10.8.0.1` | Relay address within VPN |
-| `TUNNEL_SERVER_IP` | `10.8.0.2` | Target device address within VPN |
-| `TUNNEL_PORT` | `51820` | WireGuard listen port |
-| `TUNNEL_DNS_SERVER` | `10.8.0.2` | DNS server for peers |
-| `TUNNEL_ALLOWED_IPS` | `10.8.0.0/24` | IPs routed through tunnel |
-| `TUNNEL_INTERFACE` | `wg0` | WireGuard interface name |
-| `TUNNEL_CONFIG_DIR` | `~/.config/qp-tunnel` | State directory |
-| `TUNNEL_SSH_KEY` | `~/.ssh/id_ed25519` | SSH key for relay access |
-| `DO_API_TOKEN` | (none) | DigitalOcean API token |
-| `RELAY_HOST` | (none) | Server IP for SSH provider |
-| `RELAY_SSH_USER` | `root` | SSH user for SSH provider |
-
-All values are overridable via environment variables or `.env.tunnel`.
-
-## State Directory
-
-All state lives in `~/.config/${TUNNEL_APP_NAME}/`:
+## Double Encryption
 
 ```
-~/.config/qp-tunnel/
-  peers.json              # Peer registry (relay, peers, IP pool)
-  services.json           # Open services registry
-  audit.log               # Structured JSON audit log (JSONL)
-  capsules.db             # SQLite Capsule database (tamper-evident)
-  relay.key               # Relay private key (mode 600)
-  relay.pub               # Relay public key
-  relay-server.json       # Relay server metadata
-  server-relay.psk        # Server-relay preshared key
-  tls/                    # Certificates (tunnel-open)
-    ca.key                # Ed25519 CA private key (mode 600)
-    ca.crt                # CA public certificate
-    ca.mobileconfig       # iOS trust profile
-    <name>.key            # Per-service TLS key (mode 600)
-    <name>.crt            # Per-service TLS cert
-  services/               # Per-service runtime (tunnel-open)
-    <name>/
-      Caddyfile           # Caddy config for this service
-      caddy.pid           # Caddy process ID
-  peers/
-    alice/
-      alice.conf          # WireGuard client config
-      preshared.key       # Peer preshared key
-  archive/                # Revoked peers + closed service certs
-  key-backups/            # Old keys from rotation
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        OUTER LAYER: WireGuard                          │
+│                                                                         │
+│  Key exchange: Curve25519 (X25519)                                     │
+│  Encryption:   ChaCha20-Poly1305                                       │
+│  Hashing:      BLAKE2s                                                  │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                   INNER LAYER: PQ TLS 1.3                      │    │
+│  │                   (tunnel-open services only)                   │    │
+│  │                                                                 │    │
+│  │  Key exchange: X25519MLKEM768 (hybrid classical + PQ)          │    │
+│  │  Encryption:   AES-256-GCM                                     │    │
+│  │  Certificates: Ed25519 (internal CA)                           │    │
+│  │                                                                 │    │
+│  │              ┌────────────────────────┐                        │    │
+│  │              │   Your application     │                        │    │
+│  │              │   (plaintext HTTP)     │                        │    │
+│  │              └────────────────────────┘                        │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+If Curve25519 is broken by a quantum computer, the inner PQ TLS layer still protects session data. If ML-KEM-768 has an implementation flaw, WireGuard's outer layer still protects. Both must fail simultaneously for data exposure.
+
+See [CRYPTO-NOTICE.md](docs/CRYPTO-NOTICE.md) for the full cryptographic analysis.
+
+---
 
 ## Audit System
 
@@ -246,43 +233,83 @@ Logged actions: `setup_relay`, `tunnel_join`, `peer_add`, `peer_remove`, `key_ro
 When [qp-capsule](https://github.com/quantumpipes/capsule) is installed, audit events are sealed as tamper-evident Capsules using SHA3-256 + Ed25519 signatures. This provides cryptographic proof that records have not been modified after creation.
 
 ```bash
-pip install qp-capsule       # Or: auto-installs on first use
-qp-capsule verify             # Verify audit chain integrity
+pip install qp-capsule           # Or: auto-installs on first use
+qp-capsule verify --db capsules.db   # Verify chain integrity
 ```
 
-The JSON audit log serves as a fast local index. Capsules are the cryptographic source of truth.
+The JSON audit log is the fast local index. Capsules are the cryptographic source of truth. Golden test vectors for the audit format are in [`conformance/`](./conformance/).
+
+---
 
 ## Security
 
 | Layer | Mechanism |
 |-------|-----------|
 | **Transport (outer)** | WireGuard: Curve25519 + ChaCha20-Poly1305 + BLAKE2s |
-| **Transport (inner)** | PQ TLS 1.3: ML-KEM-768 + AES-256-GCM (via tunnel-open) |
+| **Transport (inner)** | PQ TLS 1.3: ML-KEM-768 + AES-256-GCM (tunnel-open) |
 | **Identity** | Unique keypair + preshared key per peer |
-| **File protection** | umask 077 on all keys (owner-only read, mode 600) |
-| **Input validation** | Strict `[a-zA-Z0-9_-]` peer names (prevents injection) |
+| **File protection** | umask 077 on all keys (owner-only, mode 600) |
+| **Input validation** | Strict `[a-zA-Z0-9_-]` regex (prevents injection) |
 | **No eval** | Zero use of `eval` in the entire codebase |
 | **Token masking** | API tokens masked in all logs (last 4 chars only) |
 | **Audit trail** | Every operation logged with timestamp, user, and result |
 | **Tamper evidence** | Optional Capsule Protocol sealing (SHA3-256 + Ed25519) |
 | **Revocation** | Immediate removal from live WireGuard interface |
 | **Archival** | Revoked configs archived, never deleted (compliance) |
-| **Key rotation** | Built-in with dry-run safety, automatic backup |
-| **Error trapping** | `set -euo pipefail` + ERR trap logs failures to audit |
+| **Key rotation** | Built-in with dry-run safety and automatic backup |
 
-See [docs/CRYPTO-NOTICE.md](docs/CRYPTO-NOTICE.md) for WireGuard's cryptographic primitives and post-quantum analysis.
+See [Security Evaluation](./docs/security.md) for the full CISO-targeted assessment including STRIDE threat model.
 
-## Compliance Positioning
+---
 
-| Framework | Key Controls |
-|-----------|-------------|
-| **HIPAA** | 164.312(e)(1) Transmission Security, access control, audit controls |
-| **CMMC L1-L2** | AC.L2-3.1.12/13/14 Remote access monitoring, encrypted sessions |
-| **FedRAMP** | AC-17, SC-8, AU-2/3 (relay must run on authorized infrastructure) |
-| **SOC 2** | CC6.1 Logical access, CC6.7 Encryption in transit |
-| **ISO 27001** | A.10 Cryptography, A.9 Access Control, A.12 Operations Security |
+## Compliance
 
-For FIPS-mandatory environments: WireGuard uses ChaCha20-Poly1305, which is not FIPS 140-2/140-3 validated. Substitute IPsec with FIPS-validated modules for those deployments.
+Tunnel maps to 5 regulatory frameworks. Each mapping documents which controls the toolkit satisfies and which require complementary application-level controls.
+
+| Framework | Controls | Focus |
+|-----------|----------|-------|
+| [HIPAA](./docs/compliance/hipaa.md) | 164.312(e)(1), 164.308(a)(5) | Transmission security, access control, audit |
+| [CMMC 2.0](./docs/compliance/cmmc.md) | AC.L2-3.1.12/13/14, AU.L2-3.3.x | Remote access monitoring, encrypted sessions |
+| [FedRAMP](./docs/compliance/fedramp.md) | AC-17, SC-8, AU-2/3 | Remote access, transmission confidentiality |
+| [SOC 2](./docs/compliance/soc2.md) | CC6.1, CC6.7, CC7.x | Logical access, encryption, incident response |
+| [ISO 27001](./docs/compliance/iso27001.md) | A.5.15, A.8.20, A.8.24, A.8.26 | Access control, network security, crypto |
+
+For FIPS-mandatory environments: WireGuard uses ChaCha20-Poly1305, which is not FIPS 140-2/140-3 validated. Substitute IPsec with FIPS-validated modules for those deployments. See the [compliance overview](./docs/compliance/).
+
+---
+
+## Configuration
+
+Copy `.env.tunnel.example` to `.env.tunnel` and customize:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TUNNEL_APP_NAME` | `qp-tunnel` | Config directory, server tags |
+| `TUNNEL_SUBNET` | `10.8.0.0/24` | VPN subnet |
+| `TUNNEL_RELAY_IP` | `10.8.0.1` | Relay address within VPN |
+| `TUNNEL_SERVER_IP` | `10.8.0.2` | Target device address within VPN |
+| `TUNNEL_PORT` | `51820` | WireGuard listen port |
+| `TUNNEL_DNS_SERVER` | `10.8.0.2` | DNS server for peers |
+| `TUNNEL_ALLOWED_IPS` | `10.8.0.0/24` | IPs routed through tunnel |
+| `TUNNEL_INTERFACE` | `wg0` | WireGuard interface name |
+| `TUNNEL_CONFIG_DIR` | `~/.config/qp-tunnel` | State directory |
+| `DO_API_TOKEN` | (none) | DigitalOcean API token |
+| `RELAY_HOST` | (none) | Server IP for SSH provider |
+
+All values are overridable via environment variables or `.env.tunnel`.
+
+### Relay Setup Providers
+
+| Provider | Flag | Requires | What it does |
+|----------|------|----------|--------------|
+| **SSH** | `--provider=ssh --host=IP` | SSH access | Configures an existing server remotely |
+| **Local** | `--provider=local` | Root on relay | Configures this machine as the relay |
+| **DigitalOcean** | `--provider=digitalocean` | `DO_API_TOKEN` | Provisions a new Droplet |
+| **Script** | `--generate-script` | Nothing | Outputs setup script to stdout |
+
+Auto-detection: if `DO_API_TOKEN` is set, defaults to DigitalOcean. If `RELAY_HOST` is set, defaults to SSH.
+
+---
 
 ## Testing
 
@@ -295,7 +322,9 @@ make test-integration  # Full peer lifecycle workflows
 make test-smoke        # File existence and structure
 ```
 
-Tests cover: input validation, key generation, registry CRUD, audit logging, Capsule sealing, certificate generation, PQ TLS config, firewall rules, service lifecycle, file permissions (600/700), peer lifecycle, key rotation, security hardening (no eval, safe umask), edge cases, and error paths.
+Tests cover: input validation, key generation, registry CRUD, audit logging, Capsule sealing, certificate generation, PQ TLS config, firewall rules, service lifecycle, file permissions (600/700), peer lifecycle, key rotation, security hardening, edge cases, and error paths.
+
+---
 
 ## Dependencies
 
@@ -316,38 +345,35 @@ Tests cover: input validation, key generation, registry CRUD, audit logging, Cap
 | `qrencode` | QR codes for mobile WireGuard apps |
 | `qp-capsule` | Tamper-evident audit sealing (auto-installs via pip) |
 | `doctl` | DigitalOcean CLI (curl fallback exists) |
-| `ssh` | Remote relay setup via `--provider=ssh` |
 
-## Use in Your Own Project
+---
 
-QP Tunnel is designed to be embedded or forked.
+## Documentation
 
-**Embed via Makefile:**
-```makefile
-include path/to/tunnel/Makefile
-```
+| Document | Audience |
+|----------|----------|
+| [Architecture](./docs/architecture.md) | Developers, Auditors |
+| [Security Evaluation](./docs/security.md) | CISOs, Security Teams |
+| [Why Tunnel](./docs/why-tunnel.md) | Decision-Makers, Architects |
+| [Compliance Mappings](./docs/compliance/) | Regulators, GRC |
+| [Cryptographic Notice](./docs/CRYPTO-NOTICE.md) | Security Engineers |
+| [Narrative Guide](./docs/GUIDE.md) | New Users |
 
-**Rebrand:**
-```bash
-export TUNNEL_APP_NAME=mycompany
-# Paths become ~/.config/mycompany/, tags become mycompany-tunnel, etc.
-```
+### Examples
 
-**Fork and customize:** the code is modular. `lib/` contains all shared logic. Scripts are thin wrappers. Swap the relay provider, change the subnet, add your own audit backend.
+| Guide | Use Case |
+|-------|----------|
+| [DigitalOcean Quickstart](./examples/digitalocean-quickstart.md) | Cloud relay with 3 peers and exposed service |
+| [Home Lab](./examples/home-lab.md) | Raspberry Pi relay with Home Assistant |
+| [Healthcare Clinic](./examples/healthcare-clinic.md) | HIPAA-compliant remote EHR access |
+
+---
 
 ## Project Structure
 
 ```
 .
-├── tunnel-setup-relay.sh        # Relay provisioning (SSH, local, DigitalOcean, script)
-├── tunnel-join.sh               # Join relay from target device
-├── tunnel-add-peer.sh           # Add peer (config + QR)
-├── tunnel-remove-peer.sh        # Revoke peer (immediate)
-├── tunnel-status.sh             # Peer status with live data
-├── tunnel-rotate-keys.sh        # Key rotation (dry-run default)
-├── tunnel-open.sh               # Expose service with PQ TLS
-├── tunnel-close.sh              # Stop exposing a service
-├── tunnel-list.sh               # List open services
+├── tunnel-*.sh                  # 9 commands (setup, join, add, remove, status, rotate, open, close, list)
 ├── tunnel-preflight.sh          # Pre-flight setup (sourced by all scripts)
 ├── lib/
 │   ├── common.sh                # Logging, validation, config defaults
@@ -358,28 +384,34 @@ export TUNNEL_APP_NAME=mycompany
 ├── templates/
 │   ├── client.conf.tpl          # Client config template
 │   └── Caddyfile.open.tpl       # PQ TLS Caddy template
-├── tests/
-│   ├── unit/                    # 15 test files
-│   ├── integration/             # 6 test files
-│   └── smoke/                   # Standalone verification
-├── docs/
-│   ├── CRYPTO-NOTICE.md         # Cryptographic analysis
-│   └── GUIDE.md                 # Narrative walkthrough
+├── conformance/                 # Audit log golden test vectors (15 fixtures)
+├── completions/                 # Bash and Zsh tab-completion scripts
+├── tests/                       # 370+ tests (unit, integration, smoke)
+├── docs/                        # Architecture, security, compliance, guides
+├── examples/                    # Deployment walkthroughs
 ├── .env.tunnel.example          # Configuration template
 ├── Makefile                     # All operations as Make targets
-├── VERSION                      # 0.1.0
-├── LICENSE                      # Apache 2.0
-├── CONTRIBUTING.md              # How to contribute
-├── SECURITY.md                  # Vulnerability reporting
-└── NOTICE                       # Copyright + attribution
+└── VERSION                      # 0.1.0
 ```
+
+---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and pull requests welcome.
+See [CONTRIBUTING.md](./CONTRIBUTING.md). Issues and pull requests welcome. New relay providers can be proposed via [provider request](https://github.com/quantumpipes/tunnel/issues/new?template=provider-request.md).
 
-## License
+## License and Patents
 
-Apache License 2.0. See [LICENSE](LICENSE).
+[Apache License 2.0](./LICENSE) with [additional patent grant](./PATENTS.md). You can use all patented innovations freely for any purpose, including commercial use.
 
-Copyright 2026 Quantum Pipes Technologies, LLC.
+---
+
+<div align="center">
+
+**Encrypted remote access. Zero cloud dependency. Full audit trail.**
+
+[Documentation](./docs/) · [Examples](./examples/) · [Conformance](./conformance/) · [Security Policy](./SECURITY.md) · [Patent Grant](./PATENTS.md)
+
+Copyright 2026 [Quantum Pipes Technologies, LLC](https://quantumpipes.com)
+
+</div>
