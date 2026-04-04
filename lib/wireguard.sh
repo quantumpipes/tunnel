@@ -85,7 +85,7 @@ wg_save() {
 wg_show_peers() {
     local iface="${1:-${TUNNEL_INTERFACE:-wg0}}"
 
-    wg show "$iface" dump | tail -n +2 | while IFS=$'\t' read -r pubkey _psk endpoint _allowed_ips handshake _rx _tx _keepalive; do
+    wg show "$iface" dump | tail -n +2 | while IFS=$'\t' read -r pubkey _psk endpoint allowed_ips handshake rx tx _keepalive; do
         local handshake_str="never"
         if [[ "$handshake" != "0" ]]; then
             handshake_str="$(date -d "@$handshake" -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "$handshake")"
