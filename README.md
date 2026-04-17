@@ -11,8 +11,22 @@ Automate WireGuard VPN setup, peer management, and service exposure with post-qu
 [![Conformance](https://img.shields.io/badge/Conformance-15_vectors-ff69b4.svg)](./conformance/)
 [![Crypto](https://img.shields.io/badge/Crypto-WireGuard_%2B_PQ_TLS-purple.svg)](#security)
 [![Capsule](https://img.shields.io/badge/Audit-Capsule_Protocol-orange.svg)](https://github.com/quantumpipes/capsule)
+[![AI Agents](https://img.shields.io/badge/AI%20Agents-AGENTS.md-blueviolet.svg)](./AGENTS.md)
 
 </div>
+
+> **AI coding agents:** start with [AGENTS.md](./AGENTS.md). It contains the 9-command CLI surface, shell style rules (`set -euo pipefail`, quoted expansions, no `eval`), the two-layer crypto model, and the immediate-revocation / archival-permanent audit invariants.
+
+**Try it on your codebase.** Paste this into Claude Code, Cursor, Codex, or any AI coding agent:
+
+```text
+Read the QP Tunnel README and AGENTS.md at https://github.com/quantumpipes/tunnel.
+Then survey my infrastructure for remote-access surfaces: port forwards, bastion hosts,
+ad-hoc SSH tunnels, commercial VPNs, and exposed service endpoints. For each, evaluate
+whether a WireGuard outer layer plus post-quantum TLS inner layer would improve
+confidentiality, auditability, or operational simplicity. Recommend the single highest-
+leverage surface to migrate first, with concrete ports, hostnames, and cut-over steps.
+```
 
 ---
 
