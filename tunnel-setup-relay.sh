@@ -175,12 +175,20 @@ if [[ "$PROVIDER" == "local" ]]; then
     # Run the setup script locally
     _build_setup_script | bash
 
-    # Determine public IP
+    # Determine public IP. Air-gap posture (M17): do NOT leak the operator's
+    # public IP to third-party echo services by default. Require RELAY_HOST to
+    # be supplied out-of-band. Only fall back to an external IP-echo service
+    # when TUNNEL_ALLOW_IP_ECHO=1 is explicitly set (breaks air-gap).
     RELAY_PUBLIC_IP="${RELAY_HOST:-}"
     if [[ -z "$RELAY_PUBLIC_IP" ]]; then
-        RELAY_PUBLIC_IP="$(curl -4 -sS --max-time 5 https://ifconfig.me 2>/dev/null || \
-                          curl -4 -sS --max-time 5 https://api.ipify.org 2>/dev/null || \
-                          echo "UNKNOWN")"
+        if [[ "${TUNNEL_ALLOW_IP_ECHO:-0}" == "1" ]]; then
+            RELAY_PUBLIC_IP="$(curl -4 -sS --max-time 5 https://ifconfig.me 2>/dev/null || \
+                              curl -4 -sS --max-time 5 https://api.ipify.org 2>/dev/null || \
+                              echo "UNKNOWN")"
+        else
+            log_error "RELAY_HOST not set and TUNNEL_ALLOW_IP_ECHO is off. Set RELAY_HOST=<public-ip-or-host> (air-gap safe), or set TUNNEL_ALLOW_IP_ECHO=1 to permit an external IP-echo lookup."
+            exit 1
+        fi
     fi
     RELAY_ENDPOINT="${RELAY_PUBLIC_IP}:${TUNNEL_PORT}"
 
@@ -220,9 +228,30 @@ if [[ "$PROVIDER" == "ssh" ]]; then
     log_info "Configuring relay on $RELAY_HOST via SSH (user: $RELAY_SSH_USER)"
     require_cmd ssh
 
+    # Host-key trust (M16): TOFU (accept-new) lets a first-connect MITM
+    # impersonate the relay and capture the WireGuard bootstrap. Require the
+    # relay host key to be pinned out-of-band via RELAY_SSH_HOST_KEY (a single
+    # known_hosts line, e.g. the output of `ssh-keyscan -t ed25519 <host>`
+    # verified through a trusted channel). Only fall back to accept-new when
+    # RELAY_ALLOW_TOFU=1 is explicitly set.
+    _ssh_known_hosts=""
+    _ssh_strict_opts=(-o "StrictHostKeyChecking=yes")
+    if [[ -n "${RELAY_SSH_HOST_KEY:-}" ]]; then
+        _ssh_known_hosts="$(mktemp)"
+        printf '%s\n' "$RELAY_SSH_HOST_KEY" > "$_ssh_known_hosts"
+        _ssh_strict_opts+=(-o "UserKnownHostsFile=$_ssh_known_hosts")
+    elif [[ "${RELAY_ALLOW_TOFU:-0}" == "1" ]]; then
+        log_warn "RELAY_ALLOW_TOFU=1: accepting unknown relay host key on first connect (MITM-exposed)."
+        _ssh_strict_opts=(-o "StrictHostKeyChecking=accept-new")
+    else
+        log_error "RELAY_SSH_HOST_KEY not set. Pin the relay host key out-of-band (e.g. ssh-keyscan -t ed25519 $RELAY_HOST, verified via a trusted channel), or set RELAY_ALLOW_TOFU=1 to accept on first connect (not recommended)."
+        exit 1
+    fi
+
     # Run the setup script on the remote server
-    _build_setup_script | ssh -o StrictHostKeyChecking=accept-new \
+    _build_setup_script | ssh "${_ssh_strict_opts[@]}" \
         "${RELAY_SSH_USER}@${RELAY_HOST}" bash
+    [[ -n "$_ssh_known_hosts" ]] && rm -f "$_ssh_known_hosts"
 
     RELAY_ENDPOINT="${RELAY_HOST}:${TUNNEL_PORT}"
 
