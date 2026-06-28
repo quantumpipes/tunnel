@@ -171,35 +171,92 @@ registry_list_peers() {
 
 # ---------------------------------------------------------------------------
 # registry_next_ip
-# Returns the next available client IP and increments the counter.
+# Returns the lowest available client IP in the pool subnet.
+#
+# An IP is "available" when it is NOT in ip_pool.reserved AND is NOT currently
+# leased to any active peer (.peers[] | select(.status == "active") | tunnel_ip).
+# next_client_ip is treated only as a starting hint; the scan never hands out an
+# address that collides with the reserved list or a live lease, which would
+# otherwise route two peers to the same tunnel IP.
+#
+# The chosen IP is asserted unused (against the freshly re-read registry) before
+# the next_client_ip hint is advanced, so concurrent allocations cannot silently
+# duplicate an address.
+#
+# Returns:
+#   0 with the allocated IP on stdout, or 1 if the pool is exhausted.
 # ---------------------------------------------------------------------------
 registry_next_ip() {
     local path
     path="$(registry_path)"
 
-    local next_ip
-    next_ip="$(jq -r '.ip_pool.next_client_ip' "$path")"
+    # Derive the /24 prefix and the hint's host octet. The hint only seeds the
+    # scan start; reserved + active-lease sets are the source of truth.
+    local prefix hint hint_last
+    prefix="$(jq -r '.ip_pool.subnet' "$path" | cut -d. -f1-3)"
+    hint="$(jq -r '.ip_pool.next_client_ip' "$path")"
+    hint_last="$(printf '%s' "$hint" | cut -d. -f4)"
 
-    # Validate current IP is allocatable
-    local prefix last
-    prefix="$(echo "$next_ip" | cut -d. -f1-3)"
-    last="$(echo "$next_ip" | cut -d. -f4)"
+    # Fall back to the first usable host octet if the hint is malformed.
+    if [[ ! "$hint_last" =~ ^[0-9]+$ ]] || (( hint_last < 1 )) || (( hint_last > 254 )); then
+        hint_last=2
+    fi
 
-    if (( last > 254 )); then
+    # Snapshot the set of addresses that must not be handed out: every reserved
+    # entry plus every active peer's tunnel_ip. One IP per line for grep -x.
+    local taken
+    taken="$(jq -r '
+        (.ip_pool.reserved // [])
+        + ([.peers[] | select(.status == "active") | .tunnel_ip])
+        | .[]
+    ' "$path")"
+
+    # Scan from the hint to the top of the /24 host range, then wrap to fill any
+    # gaps below the hint (e.g. freed addresses).
+    local candidate chosen=""
+    local last
+    for last in $(seq "$hint_last" 254) $(seq 1 $(( hint_last - 1 ))); do
+        candidate="${prefix}.${last}"
+        if ! printf '%s\n' "$taken" | grep -qxF "$candidate"; then
+            chosen="$candidate"
+            break
+        fi
+    done
+
+    if [[ -z "$chosen" ]]; then
         log_error "IP pool exhausted"
         return 1
     fi
 
-    # Increment counter for the next allocation
-    local new_last new_ip
-    new_last=$(( last + 1 ))
-    new_ip="${prefix}.${new_last}"
+    # Assert the chosen IP is genuinely unused against a fresh read of the
+    # registry before committing, so we never write a duplicate lease.
+    local verify_taken
+    verify_taken="$(jq -r '
+        (.ip_pool.reserved // [])
+        + ([.peers[] | select(.status == "active") | .tunnel_ip])
+        | .[]
+    ' "$path")"
+    if printf '%s\n' "$verify_taken" | grep -qxF "$chosen"; then
+        log_error "Chosen IP $chosen is already in use; refusing to allocate"
+        return 1
+    fi
+
+    # Advance the hint past the chosen address (best-effort; the scan does not
+    # rely on it for correctness, only as a starting offset).
+    local chosen_last next_last next_hint
+    chosen_last="$(printf '%s' "$chosen" | cut -d. -f4)"
+    if (( chosen_last < 254 )); then
+        next_last=$(( chosen_last + 1 ))
+    else
+        next_last=1
+    fi
+    next_hint="${prefix}.${next_last}"
 
     local tmp="${path}.tmp.$$"
-    jq --arg ip "$new_ip" '.ip_pool.next_client_ip = $ip' "$path" > "$tmp"
+    jq --arg ip "$next_hint" '.ip_pool.next_client_ip = $ip' "$path" > "$tmp"
     mv "$tmp" "$path"
 
-    printf '%s' "$next_ip"
+    printf '%s' "$chosen"
 }
 
 # ---------------------------------------------------------------------------

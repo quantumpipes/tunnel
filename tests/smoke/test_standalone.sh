@@ -91,7 +91,11 @@ check "Makefile: tunnel-verify"     grep -q 'tunnel-verify:' "$TUNNEL_DIR/Makefi
 
 # Check lib/audit.sh has Capsule integration (required, not optional)
 check "audit.sh: ensure_capsule"    grep -q '_ensure_capsule' "$TUNNEL_DIR/lib/audit.sh"
-check "audit.sh: pip install"       grep -q 'pip install.*qp-capsule' "$TUNNEL_DIR/lib/audit.sh"
+# SECURITY: audit.sh must NOT auto-install qp-capsule from PyPI (dependency
+# confusion + air-gap break). Assert the pip-install path is gone and the
+# vendored offline resolver is present instead.
+check "audit.sh: no pip install"    bash -c '! grep -q "pip.*install.*qp-capsule" "'"$TUNNEL_DIR"'/lib/audit.sh"'
+check "audit.sh: vendored resolver" grep -q '_capsule_bin' "$TUNNEL_DIR/lib/audit.sh"
 check "audit.sh: capsule_seal"      grep -q '_capsule_seal' "$TUNNEL_DIR/lib/audit.sh"
 check "audit.sh: audit_verify"      grep -q 'audit_verify' "$TUNNEL_DIR/lib/audit.sh"
 
