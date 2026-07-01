@@ -102,34 +102,63 @@ audit_trap_handler() {
 }
 
 # ---------------------------------------------------------------------------
+# _capsule_bin
+# Resolves the qp-capsule executable from the vendored offline set first, then
+# from PATH. The vendored binary is pinned and shipped with the tunnel scripts,
+# so an air-gapped host never needs network access. Honors a TUNNEL_CAPSULE_BIN
+# override for operators who install it elsewhere on a sealed image.
+#
+# Outputs:
+#   The resolved executable path on stdout (empty if none found).
+# Returns:
+#   0 if a usable qp-capsule was found, 1 otherwise.
+# ---------------------------------------------------------------------------
+_capsule_bin() {
+    # Explicit operator override (must be an executable file).
+    if [[ -n "${TUNNEL_CAPSULE_BIN:-}" && -x "${TUNNEL_CAPSULE_BIN}" ]]; then
+        printf '%s' "${TUNNEL_CAPSULE_BIN}"
+        return 0
+    fi
+
+    # Vendored, pinned offline copy shipped alongside the tunnel scripts.
+    # SCRIPT_DIR is lib/, so the repo root is one level up.
+    local vendored="${SCRIPT_DIR}/../vendor/qp-capsule/qp-capsule"
+    if [[ -x "$vendored" ]]; then
+        printf '%s' "$vendored"
+        return 0
+    fi
+
+    # System install on PATH (e.g. a sealed enterprise image).
+    local on_path
+    if on_path="$(command -v qp-capsule 2>/dev/null)"; then
+        printf '%s' "$on_path"
+        return 0
+    fi
+
+    return 1
+}
+
+# ---------------------------------------------------------------------------
 # _ensure_capsule
-# Checks if qp-capsule CLI is available. Auto-installs via pip if needed.
-# Returns 0 if available, 1 otherwise.
+# Checks whether the qp-capsule CLI is available from the vendored offline set
+# or a sealed system install. NEVER installs anything: running pip from this
+# script would reach public PyPI on every invocation, a dependency-confusion
+# and data-exfiltration vector that also breaks air-gap guarantees. Ship
+# qp-capsule via the pinned vendored set instead.
+#
+# Returns:
+#   0 if qp-capsule is available, 1 otherwise (caller decides how to gate).
 # ---------------------------------------------------------------------------
 _ensure_capsule() {
-    if command -v qp-capsule &>/dev/null; then
+    if _capsule_bin >/dev/null; then
         return 0
     fi
 
-    log_info "qp-capsule CLI not found. Attempting to install via pip..."
-
-    local pip_cmd=""
-    if command -v pip3 &>/dev/null; then
-        pip_cmd="pip3"
-    elif command -v pip &>/dev/null; then
-        pip_cmd="pip"
-    else
-        log_warn "pip not found. Cannot auto-install qp-capsule."
-        return 1
-    fi
-
-    if "$pip_cmd" install --quiet qp-capsule 2>/dev/null; then
-        log_success "Installed qp-capsule CLI"
-        return 0
-    else
-        log_warn "Failed to install qp-capsule via pip."
-        return 1
-    fi
+    log_warn "qp-capsule CLI not found (vendored set or PATH)."
+    log_warn "Tamper-evident Capsule sealing is unavailable. This script will"
+    log_warn "NOT auto-install it: pip from a script breaks air-gap and is a"
+    log_warn "dependency-confusion risk. Ship the pinned vendored qp-capsule."
+    return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -143,7 +172,8 @@ _capsule_seal() {
         return 0
     fi
 
-    if ! command -v qp-capsule &>/dev/null; then
+    local cap_bin
+    if ! cap_bin="$(_capsule_bin)"; then
         return 0
     fi
 
@@ -151,7 +181,7 @@ _capsule_seal() {
     config_dir="$(ensure_config_dir)"
     local db_file="${config_dir}/capsules.db"
 
-    echo "$entry" | qp-capsule seal --db "$db_file" 2>/dev/null || true
+    printf '%s' "$entry" | "$cap_bin" seal --db "$db_file" 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -160,9 +190,10 @@ _capsule_seal() {
 # Returns 0 if all Capsules are valid, 1 if tampered or unavailable.
 # ---------------------------------------------------------------------------
 audit_verify() {
-    if ! command -v qp-capsule &>/dev/null; then
+    local cap_bin
+    if ! cap_bin="$(_capsule_bin)"; then
         log_error "qp-capsule CLI not installed. Cannot verify audit chain."
-        log_info "Install with: pip install qp-capsule"
+        log_info "Ship the pinned qp-capsule via the vendored offline set."
         return 1
     fi
 
@@ -175,5 +206,43 @@ audit_verify() {
         return 1
     fi
 
-    qp-capsule verify --db "$db_file"
+    "$cap_bin" verify --db "$db_file"
+}
+
+# ---------------------------------------------------------------------------
+# audit_require_capsule COMMAND_LABEL
+#
+# Fail-closed guard for state-changing / security-relevant commands. Call this
+# before performing such an operation. If qp-capsule is unavailable the script
+# cannot produce tamper-evident audit records, so we REFUSE to proceed rather
+# than silently claim audit coverage we cannot deliver. Read-only commands do
+# not need this guard.
+#
+# Override (sealed images where Capsule is intentionally external) is via an
+# explicit, named env var so the decision is auditable, never accidental.
+#
+# Args:
+#   COMMAND_LABEL: human-readable name of the command being gated (for logs).
+# Returns:
+#   0 if Capsule sealing is available (or explicitly overridden), 1 otherwise.
+# ---------------------------------------------------------------------------
+audit_require_capsule() {
+    local command_label="${1:-state-changing command}"
+
+    if _capsule_bin >/dev/null; then
+        return 0
+    fi
+
+    if [[ "${TUNNEL_ALLOW_UNSEALED_AUDIT:-}" == "1" ]]; then
+        log_warn "qp-capsule unavailable; proceeding with '${command_label}'"
+        log_warn "because TUNNEL_ALLOW_UNSEALED_AUDIT=1. Audit records for this"
+        log_warn "run are NOT tamper-evident."
+        return 0
+    fi
+
+    log_error "Refusing '${command_label}': qp-capsule unavailable, so this"
+    log_error "operation cannot be sealed as tamper-evident audit evidence."
+    log_error "Ship the pinned vendored qp-capsule, or set"
+    log_error "TUNNEL_ALLOW_UNSEALED_AUDIT=1 to explicitly accept unsealed audit."
+    return 1
 }

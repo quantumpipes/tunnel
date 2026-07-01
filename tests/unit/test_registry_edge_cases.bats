@@ -53,15 +53,87 @@ teardown() {
     [ "$output" = "10.8.0.254" ]
 }
 
-@test "registry_next_ip exhausts pool after .254" {
+@test "registry_next_ip exhausts pool when every host is reserved or leased" {
+    # True exhaustion: the hint is only advisory now, so a high hint alone is
+    # not exhaustion. Reserve the entire .1-.254 host range.
+    local path reserved
+    path="$(registry_path)"
+    reserved="$(jq -cn '[range(1;255) | "10.8.0." + (tostring)]')"
+    local tmp="${path}.tmp.$$"
+    jq --argjson r "$reserved" '.ip_pool.reserved = $r' "$path" > "$tmp"
+    mv "$tmp" "$path"
+    run registry_next_ip
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"IP pool exhausted"* ]]
+}
+
+@test "registry_next_ip treats a high next_client_ip hint as advisory, not exhaustion" {
+    # A stale .255 hint must NOT block allocation while free addresses remain.
     local path
     path="$(registry_path)"
     local tmp="${path}.tmp.$$"
     jq '.ip_pool.next_client_ip = "10.8.0.255"' "$path" > "$tmp"
     mv "$tmp" "$path"
     run registry_next_ip
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"IP pool exhausted"* ]]
+    [ "$status" -eq 0 ]
+    # First free host above reserved (.1, .2) is .3.
+    [ "$output" = "10.8.0.3" ]
+}
+
+# ---------------------------------------------------------------------------
+# IP collision: must never hand out a reserved or actively-leased address
+# ---------------------------------------------------------------------------
+
+@test "registry_next_ip never returns a reserved address" {
+    # Default reserved = .1 and .2; first allocation must skip both.
+    run registry_next_ip
+    [ "$status" -eq 0 ]
+    [ "$output" != "10.8.0.1" ]
+    [ "$output" != "10.8.0.2" ]
+}
+
+@test "registry_next_ip skips an IP already leased to an active peer (stale hint)" {
+    # Simulate the collision bug: hint points at .10 but .10 is already leased.
+    registry_add_peer "alice" "KEY" "10.8.0.10"
+    local path
+    path="$(registry_path)"
+    local tmp="${path}.tmp.$$"
+    jq '.ip_pool.next_client_ip = "10.8.0.10"' "$path" > "$tmp"
+    mv "$tmp" "$path"
+    run registry_next_ip
+    [ "$status" -eq 0 ]
+    [ "$output" != "10.8.0.10" ]
+    [ "$output" = "10.8.0.11" ]
+}
+
+@test "registry_next_ip allocations across many peers are all distinct and unreserved" {
+    local ips=""
+    local i ip
+    for i in $(seq 1 20); do
+        ip="$(registry_next_ip)"
+        registry_add_peer "peer${i}" "KEY${i}" "$ip"
+        # No reserved address handed out.
+        [ "$ip" != "10.8.0.1" ]
+        [ "$ip" != "10.8.0.2" ]
+        # No duplicate handed out.
+        [[ "$ips" != *"|${ip}|"* ]]
+        ips="${ips}|${ip}|"
+    done
+}
+
+@test "registry_next_ip reuses an address freed by revocation" {
+    # Lease .10, revoke it, then a later allocation may reuse it once freed.
+    registry_add_peer "alice" "KEY1" "10.8.0.10"
+    registry_remove_peer "alice"
+    # .10 is no longer an active lease, so it is allocatable again.
+    local path
+    path="$(registry_path)"
+    local tmp="${path}.tmp.$$"
+    jq '.ip_pool.next_client_ip = "10.8.0.10"' "$path" > "$tmp"
+    mv "$tmp" "$path"
+    run registry_next_ip
+    [ "$status" -eq 0 ]
+    [ "$output" = "10.8.0.10" ]
 }
 
 # ---------------------------------------------------------------------------
