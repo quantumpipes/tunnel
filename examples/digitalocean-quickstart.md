@@ -13,7 +13,7 @@ cp .env.tunnel.example .env.tunnel
 Edit `.env.tunnel`:
 
 ```bash
-DO_API_TOKEN=dop_v1_a4b8c12d56e78f90a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4
+DO_API_TOKEN=dop_v1_REPLACE_WITH_YOUR_DIGITALOCEAN_TOKEN
 TUNNEL_DO_REGION=nyc3
 TUNNEL_DO_SIZE=s-1vcpu-512mb-10gb
 TUNNEL_APP_NAME=qp-tunnel
